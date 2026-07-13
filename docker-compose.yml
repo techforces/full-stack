@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  database:
+    image: postgres:17
+    container_name: fullstack-container
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: fullstack-db
+    ports:
+      - "5000:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:

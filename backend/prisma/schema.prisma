@@ -1,0 +1,68 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum PropertyType {
+  PRVT
+  PUB
+}
+
+model Property {
+  id         String     @id @default(cuid())
+  name       String
+  type       PropertyType
+  manager    String
+  accountant String
+
+  // property.fileId - file.id  (modeled as 1:1)
+  fileId     String     @unique
+  file       File       @relation(fields: [fileId], references: [id])
+
+  // property.id < building.propertyId (1:N)
+  buildings  Building[]
+}
+
+model File {
+  id       String    @id @default(cuid())
+  name     String
+  data     Bytes
+
+  // back relation for 1:1 with Property
+  property Property?
+}
+
+model Building {
+  id           String   @id @default(cuid())
+  street       String
+  houseNumber  String
+  otherDetails String?
+
+  // property.id < building.propertyId (N:1)
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // building.id < unit.buildingId (1:N)
+  units        Unit[]
+}
+
+model Unit {
+  id               String   @id @default(cuid())
+  type             String
+  number           Int
+  floor            Int
+  entrance         String
+  size             Float
+  share            Float
+  constructionYear Int
+  rooms            Int
+
+  // building.id < unit.buildingId (N:1)
+  buildingId       String
+  building         Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@index([buildingId])
+}
