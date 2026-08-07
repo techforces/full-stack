@@ -11,6 +11,17 @@ enum PropertyType {
   PUB
 }
 
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime   @default(now())
+
+  // user.id < property.ownerId (1:N)
+  properties   Property[]
+}
+
 model Property {
   id         String     @id @default(cuid())
   name       String
@@ -18,12 +29,18 @@ model Property {
   manager    String
   accountant String
 
+  // user.id < property.ownerId (N:1)
+  ownerId    String
+  owner      User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   // property.fileId - file.id  (modeled as 1:1)
   fileId     String     @unique
   file       File       @relation(fields: [fileId], references: [id])
 
   // property.id < building.propertyId (1:N)
   buildings  Building[]
+
+  @@index([ownerId])
 }
 
 model File {

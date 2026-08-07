@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Modal from "./Modal";
 import type { Property, Building, Unit } from "./Dashboard";
 import type { ViewItemType } from "../page";
+import { apiFetch } from "@/lib/api";
 
 interface ViewProps {
   type: "property" | "building" | "unit" | null;
@@ -22,8 +23,8 @@ const View = ({ type, id, setViewItem }: ViewProps) => {
     };
 
     if (!!type && !!id) {
-      const response = (await fetch(
-        `http://localhost:4000/${typesPlural[type]}/${id}`,
+      const response = (await apiFetch(
+        `/${typesPlural[type]}/${id}`,
         {
           method: "GET",
           headers: {
@@ -43,12 +44,9 @@ const View = ({ type, id, setViewItem }: ViewProps) => {
   }
 
   async function handleDownloadPropertyFile(propertyId: string) {
-    const res = await fetch(
-      `http://localhost:4000/properties/${propertyId}/file`,
-      {
-        method: "GET",
-      },
-    );
+    const res = await apiFetch(`/properties/${propertyId}/file`, {
+      method: "GET",
+    });
 
     if (!res.ok) {
       const msg = await res.text();

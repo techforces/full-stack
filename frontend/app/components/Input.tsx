@@ -4,6 +4,7 @@ interface InputProps {
   placeholder?: string;
   value?: string;
   setter?: (value: string) => void;
+  type?: string;
 }
 
 const Input = ({
@@ -12,6 +13,7 @@ const Input = ({
   placeholder = "Input placeholder",
   value,
   setter,
+  type = "text",
 }: InputProps) => {
   return (
     <div className="w-full flex flex-col gap-3">
@@ -20,7 +22,7 @@ const Input = ({
       </label>
       <input
         name={name}
-        type="text"
+        type={type}
         placeholder={placeholder}
         value={value}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>

@@ -5,6 +5,7 @@ import { useState } from "react";
 import Button from "./Button";
 import Modal from "./Modal";
 import Input from "./Input";
+import { apiFetch } from "@/lib/api";
 
 interface AddUnitProps {
   activeBuilding: null | string;
@@ -47,7 +48,7 @@ const AddUnit = ({
       return;
     }
 
-    const response = await fetch("http://localhost:4000/create-unit", {
+    const response = await apiFetch("/create-unit", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

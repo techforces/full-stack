@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Button from "./Button";
 import type { ViewItemType } from "../page";
+import { apiFetch } from "@/lib/api";
 
 interface DashboardProps {
   toggleProperty: (value: boolean) => void;
@@ -82,7 +83,7 @@ const Dashboard = ({
     "absolute right-6 top-1/2 -translate-y-1/2 box-border px-3 py-[0.375rem] border border-grey-600 rounded-lg bg-white hover:bg-pale-100";
 
   async function fetchData(type: "properties" | "buildings" | "units") {
-    const response = (await fetch(`http://localhost:4000/${type}`, {
+    const response = (await apiFetch(`/${type}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

@@ -1,17 +1,22 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 
 import prisma from "./prisma";
 import upload from "./multer";
 import logger from "./logger";
+import authRouter from "./routes/auth";
+import { requireAuth } from "./middleware/requireAuth";
 import { BadRequestError, NotFoundError } from "./errors";
 import { errorHandler, notFoundHandler } from "./errorHandler";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 
-app.use(cors());
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -39,62 +44,72 @@ app.get("/", async (req, res) => {
   });
 });
 
-app.post("/create-property", upload.single("file"), async (req, res) => {
-  const {
-    name,
-    type, //PRVT or PUB
-    manager,
-    accountant,
-  } = req.body;
+app.use("/auth", authRouter);
 
-  if (!req.file) {
-    throw new BadRequestError("File is required");
-  }
-
-  const bytes = new Uint8Array(req.file.buffer);
-
-  if (!name || !type || !manager || !accountant) {
-    throw new BadRequestError("Missing required query parameters");
-  }
-
-  logger.debug({ name, type, manager, accountant }, "creating property");
-
-  const property = await prisma.property.create({
-    data: {
+app.post(
+  "/create-property",
+  requireAuth,
+  upload.single("file"),
+  async (req, res) => {
+    const {
       name,
-      type,
+      type, //PRVT or PUB
       manager,
       accountant,
-      file: {
-        create: {
-          name: req.file.originalname,
-          data: bytes,
+    } = req.body;
+
+    if (!req.file) {
+      throw new BadRequestError("File is required");
+    }
+
+    const bytes = new Uint8Array(req.file.buffer);
+
+    if (!name || !type || !manager || !accountant) {
+      throw new BadRequestError("Missing required query parameters");
+    }
+
+    logger.debug({ name, type, manager, accountant }, "creating property");
+
+    const property = await prisma.property.create({
+      data: {
+        name,
+        type,
+        manager,
+        accountant,
+        owner: { connect: { id: req.user!.userId } },
+        file: {
+          create: {
+            name: req.file.originalname,
+            data: bytes,
+          },
         },
       },
-    },
-    include: {
-      file: true,
-    },
+      include: {
+        file: true,
+      },
+    });
+
+    res.status(201).json(property);
+  },
+);
+
+app.get("/properties", requireAuth, async (req, res) => {
+  const properties = await prisma.property.findMany({
+    where: { ownerId: req.user!.userId },
   });
-
-  res.status(201).json(property);
-});
-
-app.get("/properties", async (req, res) => {
-  const properties = await prisma.property.findMany();
 
   res.status(200).json(properties);
 });
 
-app.get("/properties/:id", async (req, res) => {
+app.get("/properties/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
     throw new BadRequestError("Property id is required");
   }
 
-  const property = await prisma.property.findUnique({
-    where: { id },
+  const property = await prisma.property.findFirst({
+    where: { id, ownerId: req.user!.userId },
     include: { file: true },
   });
 
@@ -105,11 +120,15 @@ app.get("/properties/:id", async (req, res) => {
   res.status(200).json(property);
 });
 
-app.get("/properties/:id/file", async (req, res) => {
+app.get("/properties/:id/file", requireAuth, async (req, res) => {
   const { id } = req.params;
 
-  const property = await prisma.property.findUnique({
-    where: { id },
+  if (!id) {
+    throw new BadRequestError("Property id is required");
+  }
+
+  const property = await prisma.property.findFirst({
+    where: { id, ownerId: req.user!.userId },
     include: { file: true },
   });
 
@@ -126,13 +145,21 @@ app.get("/properties/:id/file", async (req, res) => {
   res.send(Buffer.from(property.file.data));
 });
 
-app.post("/create-building", async (req, res) => {
+app.post("/create-building", requireAuth, async (req, res) => {
   const { street, houseNumber, otherDetails, propertyId } = req.body;
 
   if (!street || !houseNumber || !propertyId) {
     throw new BadRequestError(
       "Missing street, house number and specified property",
     );
+  }
+
+  const property = await prisma.property.findFirst({
+    where: { id: propertyId, ownerId: req.user!.userId },
+  });
+
+  if (!property) {
+    throw new NotFoundError("Property not found");
   }
 
   logger.debug({ street, houseNumber, propertyId }, "creating building");
@@ -149,21 +176,23 @@ app.post("/create-building", async (req, res) => {
   res.status(201).json(building);
 });
 
-app.get("/buildings", async (req, res) => {
-  const buildings = await prisma.building.findMany();
+app.get("/buildings", requireAuth, async (req, res) => {
+  const buildings = await prisma.building.findMany({
+    where: { property: { ownerId: req.user!.userId } },
+  });
 
   res.status(200).json(buildings);
 });
 
-app.get("/buildings/:id", async (req, res) => {
+app.get("/buildings/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
     throw new BadRequestError("Building id is required");
   }
 
-  const building = await prisma.building.findUnique({
-    where: { id },
+  const building = await prisma.building.findFirst({
+    where: { id, property: { ownerId: req.user!.userId } },
   });
 
   if (!building) {
@@ -173,7 +202,7 @@ app.get("/buildings/:id", async (req, res) => {
   res.status(200).json(building);
 });
 
-app.post("/create-unit", async (req, res) => {
+app.post("/create-unit", requireAuth, async (req, res) => {
   const {
     number,
     type,
@@ -202,6 +231,14 @@ app.post("/create-unit", async (req, res) => {
     );
   }
 
+  const building = await prisma.building.findFirst({
+    where: { id: buildingId, property: { ownerId: req.user!.userId } },
+  });
+
+  if (!building) {
+    throw new NotFoundError("Building not found");
+  }
+
   logger.debug({ number, type, buildingId }, "creating unit");
 
   const unit = await prisma.unit.create({
@@ -221,20 +258,22 @@ app.post("/create-unit", async (req, res) => {
   res.status(201).json(unit);
 });
 
-app.get("/units", async (req, res) => {
-  const units = await prisma.unit.findMany();
+app.get("/units", requireAuth, async (req, res) => {
+  const units = await prisma.unit.findMany({
+    where: { building: { property: { ownerId: req.user!.userId } } },
+  });
   res.status(200).json(units);
 });
 
-app.get("/units/:id", async (req, res) => {
+app.get("/units/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
     throw new BadRequestError("Unit id is required");
   }
 
-  const unit = await prisma.unit.findUnique({
-    where: { id },
+  const unit = await prisma.unit.findFirst({
+    where: { id, building: { property: { ownerId: req.user!.userId } } },
   });
 
   if (!unit) {

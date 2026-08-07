@@ -6,6 +6,7 @@ import Input from "./Input";
 import { useState } from "react";
 import InputPropertyType from "./InputPropertyType";
 import FileUpload from "./FileUpload";
+import { apiFetch } from "@/lib/api";
 
 interface AddPropertyProps {
   isOpen?: boolean;
@@ -51,7 +52,7 @@ const AddProperty = ({ isOpen, handleClose, onCreated }: AddPropertyProps) => {
       formData.append("accountant", accountant);
       formData.append("file", file);
 
-      const response = await fetch("http://localhost:4000/create-property", {
+      const response = await apiFetch("/create-property", {
         method: "POST",
         body: formData,
       });

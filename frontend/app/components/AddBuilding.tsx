@@ -5,6 +5,7 @@ import { useState } from "react";
 import Button from "./Button";
 import Modal from "./Modal";
 import Input from "./Input";
+import { apiFetch } from "@/lib/api";
 
 interface AddBuildingProps {
   activeProperty: null | string;
@@ -31,7 +32,7 @@ const AddBuilding = ({
       return;
     }
 
-    const response = await fetch("http://localhost:4000/create-building", {
+    const response = await apiFetch("/create-building", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
