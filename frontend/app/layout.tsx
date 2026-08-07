@@ -3,7 +3,7 @@ import "./globals.css";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Buena Property Management Dashboard",
+  title: "Fullstack Property Management Dashboard",
   description: "NextJS App",
 };
 
