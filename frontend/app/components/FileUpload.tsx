@@ -2,11 +2,15 @@ import { useState } from "react";
 
 interface FileUploadProps {
   label?: string;
+  accept?: string;
+  placeholder?: string;
   onFileSelect: (file: File | null) => void;
 }
 
 const FileUpload = ({
   label = "Upload label",
+  accept,
+  placeholder = "Upload a PDF file",
   onFileSelect,
 }: FileUploadProps) => {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -57,12 +61,13 @@ const FileUpload = ({
             />
           </svg>
           <p className={`text-lg ${fileName ? "text-night" : "text-grey"}`}>
-            {fileName ? fileName : "Upload a PDF file"}
+            {fileName ? fileName : placeholder}
           </p>
         </div>
         <input
           id="dropzone-file"
           type="file"
+          accept={accept}
           className="hidden"
           onChange={handleFileChange}
         />

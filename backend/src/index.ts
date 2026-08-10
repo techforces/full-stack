@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
+import { UnitImageStatus } from "@prisma/client";
+
 import prisma from "./prisma";
 import upload from "./multer";
 import logger from "./logger";
@@ -9,6 +11,7 @@ import authRouter from "./routes/auth";
 import { requireAuth } from "./middleware/requireAuth";
 import { BadRequestError, NotFoundError } from "./errors";
 import { errorHandler, notFoundHandler } from "./errorHandler";
+import { compressImageInWorker } from "./workers/runCompressImage";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -282,6 +285,81 @@ app.get("/units/:id", requireAuth, async (req, res) => {
 
   res.status(200).json(unit);
 });
+
+app.get("/units/:id/image", requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new BadRequestError("Unit id is required");
+  }
+
+  const unit = await prisma.unit.findFirst({
+    where: { id, building: { property: { ownerId: req.user!.userId } } },
+  });
+
+  if (!unit || !unit.image) {
+    throw new NotFoundError("Image not found for this unit");
+  }
+
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Content-Disposition", `inline; filename="unit-${id}.jpg"`);
+  res.send(Buffer.from(unit.image));
+});
+
+app.post(
+  "/units/:id/image",
+  requireAuth,
+  upload.single("image"),
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new BadRequestError("Unit id is required");
+    }
+
+    if (!req.file) {
+      throw new BadRequestError("Image file is required");
+    }
+
+    const unit = await prisma.unit.findFirst({
+      where: { id, building: { property: { ownerId: req.user!.userId } } },
+    });
+
+    if (!unit) {
+      throw new NotFoundError("Unit not found");
+    }
+
+    const pending = await prisma.unit.update({
+      where: { id },
+      data: { imageStatus: UnitImageStatus.PENDING },
+    });
+
+    res.status(202).json(pending);
+
+    const imageBuffer = Buffer.from(req.file.buffer);
+
+    compressImageInWorker(imageBuffer)
+      .then((compressed) =>
+        prisma.unit.update({
+          where: { id },
+          data: {
+            image: new Uint8Array(compressed),
+            imageStatus: UnitImageStatus.READY,
+          },
+        }),
+      )
+      .catch((err) => {
+        logger.error({ err, unitId: id }, "image compression failed");
+        return prisma.unit.update({
+          where: { id },
+          data: { imageStatus: UnitImageStatus.FAILED },
+        });
+      })
+      .catch((err) => {
+        logger.error({ err, unitId: id }, "failed to persist image status");
+      });
+  },
+);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

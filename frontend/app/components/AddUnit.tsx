@@ -5,6 +5,7 @@ import { useState } from "react";
 import Button from "./Button";
 import Modal from "./Modal";
 import Input from "./Input";
+import FileUpload from "./FileUpload";
 import { apiFetch } from "@/lib/api";
 
 interface AddUnitProps {
@@ -28,6 +29,8 @@ const AddUnit = ({
   const [share, setShare] = useState("");
   const [constructionYear, setConstructionYear] = useState("");
   const [rooms, setRooms] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -48,41 +51,75 @@ const AddUnit = ({
       return;
     }
 
-    const response = await apiFetch("/create-unit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        number: parseInt(number),
-        type,
-        floor: parseInt(floor),
-        entrance,
-        size: parseFloat(size),
-        share: parseFloat(share),
-        constructionYear: parseInt(constructionYear),
-        rooms: parseInt(rooms),
-        buildingId: activeBuilding,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error?.error || "Failed to create property");
+    if (image && !image.type.startsWith("image/")) {
+      alert("Only image files are allowed.");
+      return;
     }
 
-    setNumber("");
-    setType("");
-    setFloor("");
-    setEntrance("");
-    setSize("");
-    setShare("");
-    setConstructionYear("");
-    setRooms("");
+    try {
+      setIsSubmitting(true);
 
-    onCreated();
+      const response = await apiFetch("/create-unit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          number: parseInt(number),
+          type,
+          floor: parseInt(floor),
+          entrance,
+          size: parseFloat(size),
+          share: parseFloat(share),
+          constructionYear: parseInt(constructionYear),
+          rooms: parseInt(rooms),
+          buildingId: activeBuilding,
+        }),
+      });
 
-    handleClose?.();
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error?.error || "Failed to create unit");
+      }
+
+      const unit = await response.json();
+
+      if (image) {
+        const formData = new FormData();
+        formData.append("image", image);
+
+        const imageResponse = await apiFetch(`/units/${unit.id}/image`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!imageResponse.ok) {
+          const error = await imageResponse.json();
+          throw new Error(
+            error?.error || "Unit created, but image upload failed",
+          );
+        }
+      }
+
+      setNumber("");
+      setType("");
+      setFloor("");
+      setEntrance("");
+      setSize("");
+      setShare("");
+      setConstructionYear("");
+      setRooms("");
+      setImage(null);
+
+      onCreated();
+
+      handleClose?.();
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to create unit");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const TypeButton = (value: string) => {
@@ -170,10 +207,18 @@ const AddUnit = ({
             value={rooms}
             setter={setRooms}
           />
+
+          <FileUpload
+            label="Image (optional)"
+            accept="image/*"
+            placeholder="Upload an image"
+            onFileSelect={setImage}
+          />
         </div>
 
         <Button
-          label="Add unit"
+          disabled={isSubmitting}
+          label={isSubmitting ? "Adding..." : "Add unit"}
           onClick={(e: React.MouseEvent<HTMLButtonElement>) => handleSubmit(e)}
         />
       </form>

@@ -11,6 +11,13 @@ enum PropertyType {
   PUB
 }
 
+enum UnitImageStatus {
+  NONE
+  PENDING
+  READY
+  FAILED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -80,6 +87,10 @@ model Unit {
   // building.id < unit.buildingId (N:1)
   buildingId       String
   building         Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  // compressed image, populated asynchronously by a background worker after upload
+  image            Bytes?
+  imageStatus      UnitImageStatus @default(NONE)
 
   @@index([buildingId])
 }

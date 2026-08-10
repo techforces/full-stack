@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import FileUpload from "./FileUpload";
 import type { Property, Building, Unit } from "./Dashboard";
 import type { ViewItemType } from "../page";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, API_URL } from "@/lib/api";
 
 interface ViewProps {
   type: "property" | "building" | "unit" | null;
@@ -84,6 +85,54 @@ const View = ({ type, id, setViewItem }: ViewProps) => {
   useEffect(() => {
     console.log("data", data);
   }, [data]);
+
+  // While the backend's background worker is still compressing the image,
+  // poll for the unit until imageStatus moves out of PENDING.
+  useEffect(() => {
+    if (type !== "unit") return;
+
+    const unit = data as Unit | null;
+    if (!unit || unit.imageStatus !== "PENDING") return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const updated = await fetchDataById();
+        setData(updated);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [type, data]);
+
+  async function handleUploadUnitImage(unitId: string, file: File) {
+    if (!file.type.startsWith("image/")) {
+      alert("Only image files are allowed.");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await apiFetch(`/units/${unitId}/image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error?.error || "Failed to upload image");
+      }
+
+      const updated = await response.json();
+      setData(updated);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to upload image");
+    }
+  }
 
   const itemClasses = "w-full flex flex-col gap-3";
   const labelClasses = "text-xl font-medium text-grey";
@@ -238,6 +287,41 @@ const View = ({ type, id, setViewItem }: ViewProps) => {
             <div className={itemClasses}>
               <p className={labelClasses}>Rooms</p>
               <p className="text-lg">{unit.rooms}</p>
+            </div>
+
+            <div className={itemClasses}>
+              <p className={labelClasses}>Image</p>
+
+              {unit.imageStatus === "READY" && (
+                <img
+                  src={`${API_URL}/units/${unit.id}/image`}
+                  alt={`Unit ${unit.number}`}
+                  className="w-full max-w-xs rounded-xl border border-pale-200"
+                />
+              )}
+
+              {unit.imageStatus === "PENDING" && (
+                <p className="text-lg text-grey">Compressing image…</p>
+              )}
+
+              {unit.imageStatus === "FAILED" && (
+                <p className="text-lg text-red-600">
+                  Image compression failed. Try uploading again.
+                </p>
+              )}
+
+              <FileUpload
+                label={
+                  unit.imageStatus === "READY"
+                    ? "Replace image"
+                    : "Upload image"
+                }
+                accept="image/*"
+                placeholder="Upload an image"
+                onFileSelect={(file) => {
+                  if (file) handleUploadUnitImage(unit.id, file);
+                }}
+              />
             </div>
           </div>
         );

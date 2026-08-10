@@ -50,6 +50,7 @@ export type Unit = {
   constructionYear: number;
   rooms: number;
   buildingId: string;
+  imageStatus: "NONE" | "PENDING" | "READY" | "FAILED";
 };
 
 const Dashboard = ({
